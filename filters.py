@@ -332,3 +332,29 @@ class ParticleFilter(FilterBase):
 
     def get(self):
         return self.h(self.x)
+
+class RTSSmoother:
+    def __init__(self, kf):
+        self.kf = kf
+
+    def forward(self, zs):
+        self.xs = []
+        self.Ps = []
+        for z in zs:
+            self.kf.update(z)
+            self.xs.append(self.kf.x.copy())
+            self.Ps.append(self.kf.P.copy())
+        self.xs = np.stack(self.xs)
+        self.Ps = np.stack(self.Ps)
+
+    def backward(self):
+        x_hat = self.xs.copy()
+        P_hat = self.Ps.copy()
+        A = self.kf.A
+
+        for i in range(len(self.xs)-2, -1, -1):
+            Pp = A @ P_hat[i] @ A.T + self.kf.Q
+            C = P_hat[i] @ A.T @ np.linalg.inv(Pp)
+            x_hat[i] += C @ (x_hat[i+1] - A @ x_hat[i])
+            P_hat[i] += C @ (P_hat[i+1] - Pp) @ C.T
+        return np.stack(x_hat), np.stack(P_hat)
